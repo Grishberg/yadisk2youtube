@@ -14,6 +14,13 @@ import (
 	"os"
 )
 
+type Uploader interface {
+	Upload(fileName string)
+}
+
+type YaDiskDownloader struct {
+}
+
 func main() {
 	var accessToken string
 	flag.StringVar(&accessToken, "token", "", "Access Token")
@@ -40,7 +47,7 @@ func main() {
 	var offset uint32 = 1
 	for i := 0; i < 30; i++ {
 		fmt.Println("read offset: ", offset)
-		readed := getFlatFileListWithOffset(client, mediaTypes, offset)
+		readed := getFlatFileListWithOffset(accessToken, client, mediaTypes, offset)
 		if readed == 0 {
 			break
 		}
@@ -48,7 +55,10 @@ func main() {
 	}
 }
 
-func getFlatFileListWithOffset(client *src.Client, mediaTypes []src.MediaType, offset uint32) uint32 {
+func getFlatFileListWithOffset(accessToken string,
+	client *src.Client,
+	mediaTypes []src.MediaType,
+	offset uint32) uint32 {
 	options := src.FlatFileListRequestOptions{Media_type: mediaTypes, Offset: &offset}
 	info, err := client.NewFlatFileListRequest(options).Exec()
 
@@ -58,6 +68,7 @@ func getFlatFileListWithOffset(client *src.Client, mediaTypes []src.MediaType, o
 	}
 
 	for i, v := range info.Items {
+		downloadItemIfNeeded(accessToken, client, v)
 		fmt.Println(i, v.Name, v.Path)
 	}
 	if info.Limit != nil {
@@ -67,4 +78,20 @@ func getFlatFileListWithOffset(client *src.Client, mediaTypes []src.MediaType, o
 		fmt.Printf("\tOffset: %d\n", *info.Offset)
 	}
 	return uint32(len(info.Items))
+}
+
+func downloadItemIfNeeded(accessToken string,
+	client *src.Client,
+	item src.ResourceInfoResponse) {
+	path := item.Path
+	response, err := client.NewDownloadRequest(path).Exec()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	DownloadFile(accessToken, response.Href, "tmp")
+	fmt.Println(response.Href)
+	os.Exit(0)
+
 }
