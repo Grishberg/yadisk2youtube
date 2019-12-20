@@ -18,7 +18,7 @@ import (
 )
 
 type DownloaderWithProgress struct {
-	accessToken string
+	AccessToken string
 }
 
 func PrintDownloadPercent(done chan int64, path string, total int64) {
@@ -61,10 +61,10 @@ func PrintDownloadPercent(done chan int64, path string, total int64) {
 	}
 }
 
-func (downloader *DownloaderWithProgress) DownloadFile(accessToken string,
-	url string, dest string) {
+func (downloader DownloaderWithProgress) DownloadFile(
+	url string, name string, dest string) {
 
-	file := path.Base(url)
+	file := path.Base(name)
 
 	log.Printf("Downloading file %s from %s\n", file, url)
 
@@ -84,9 +84,8 @@ func (downloader *DownloaderWithProgress) DownloadFile(accessToken string,
 
 	defer out.Close()
 
-	client := &http.Client{
-		CheckRedirect: redirectPolicyFunc,
-	}
+	client := &http.Client{CheckRedirect: downloader.redirectPolicyFunc}
+
 	headResp, err := http.Head(url)
 
 	if err != nil {
@@ -106,7 +105,7 @@ func (downloader *DownloaderWithProgress) DownloadFile(accessToken string,
 	go PrintDownloadPercent(done, path.String(), int64(size))
 
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Add("Authorization", "OAuth "+accessToken)
+	req.Header.Add("Authorization", "OAuth "+downloader.AccessToken)
 	resp, err := client.Do(req)
 
 	// resp, err := http.Get(url)
@@ -129,8 +128,8 @@ func (downloader *DownloaderWithProgress) DownloadFile(accessToken string,
 	log.Printf("Download completed in %s", elapsed)
 }
 
-func (downloader *DownloaderWithProgress) redirectPolicyFunc(r *http.Request,
+func (downloader DownloaderWithProgress) redirectPolicyFunc(r *http.Request,
 	via []*http.Request) error {
-	r.Header.Add("Authorization", "OAuth "+downloader.accessToken)
+	r.Header.Add("Authorization", "OAuth "+downloader.AccessToken)
 	return nil
 }

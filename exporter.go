@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"github.com/Grishberg/yandex-disk-restapi-go/src"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Uploader interface {
@@ -41,6 +43,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	_ = os.Mkdir("tmp", os.ModePerm)
+
 	client := src.NewClient(accessToken)
 
 	fmt.Printf("Fetching flat file list ...\n")
@@ -68,8 +72,12 @@ func getFlatFileListWithOffset(accessToken string,
 	}
 
 	for i, v := range info.Items {
-		downloadItemIfNeeded(accessToken, client, v)
-		fmt.Println(i, v.Name, v.Path)
+		var extension = strings.ToUpper(filepath.Ext(v.Name))
+		fmt.Println("ext = ", extension)
+		if extension == ".MP4" {
+			downloadItemIfNeeded(accessToken, client, v)
+			fmt.Println(i, v.Name, v.Path)
+		}
 	}
 	if info.Limit != nil {
 		fmt.Printf("\tLimit: %d\n", info.Limit)
@@ -90,7 +98,8 @@ func downloadItemIfNeeded(accessToken string,
 		os.Exit(1)
 	}
 
-	DownloadFile(accessToken, response.Href, "tmp")
+	downloader := DownloaderWithProgress{accessToken}
+	downloader.DownloadFile(response.Href, item.Name, "tmp")
 	fmt.Println(response.Href)
 	os.Exit(0)
 
