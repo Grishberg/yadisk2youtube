@@ -12,24 +12,34 @@ import (
 	"fmt"
 	"github.com/Grishberg/yandex-disk-restapi-go/src"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
+
+const DISK_PREFIX = "disk:"
 
 type Uploader interface {
 	Upload(fileName string)
 }
 
 type YaDiskDownloader struct {
+	accessToken string
+	pathMask    string
+	client      *src.Client
 }
 
 func main() {
 	var accessToken string
+	var pathMask string
+
 	flag.StringVar(&accessToken, "token", "", "Access Token")
+	flag.StringVar(&pathMask, "path", "", "Search path mask")
 
 	if accessToken == "" {
 		accessToken = os.Getenv("YADISK_ACCESS_TOKEN")
 	}
+	pathMask = "VIDEO"
 
 	mediaTypeImage := src.MediaType{}
 	v := mediaTypeImage.Video()
@@ -43,15 +53,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = os.Mkdir("tmp", os.ModePerm)
+	pwd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	_ = os.Mkdir(path.Join(pwd, "tmp"), os.ModePerm)
 
 	client := src.NewClient(accessToken)
+	downloader := YaDiskDownloader{
+		accessToken,
+		pathMask,
+		client,
+	}
 
 	fmt.Printf("Fetching flat file list ...\n")
 	var offset uint32 = 1
 	for i := 0; i < 30; i++ {
 		fmt.Println("read offset: ", offset)
-		readed := getFlatFileListWithOffset(accessToken, client, mediaTypes, offset)
+		readed := downloader.getFlatFileListWithOffset(mediaTypes, offset)
 		if readed == 0 {
 			break
 		}
@@ -59,48 +80,46 @@ func main() {
 	}
 }
 
-func getFlatFileListWithOffset(accessToken string,
-	client *src.Client,
-	mediaTypes []src.MediaType,
+func (yd YaDiskDownloader) getFlatFileListWithOffset(mediaTypes []src.MediaType,
 	offset uint32) uint32 {
 	options := src.FlatFileListRequestOptions{Media_type: mediaTypes, Offset: &offset}
-	info, err := client.NewFlatFileListRequest(options).Exec()
+	info, err := yd.client.NewFlatFileListRequest(options).Exec()
 
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	for i, v := range info.Items {
-		var extension = strings.ToUpper(filepath.Ext(v.Name))
-		fmt.Println("ext = ", extension)
-		if extension == ".MP4" {
-			downloadItemIfNeeded(accessToken, client, v)
-			fmt.Println(i, v.Name, v.Path)
+	for _, item := range info.Items {
+		if yd.shouldDownloadFile(item) {
+			yd.downloadItemIfNeeded(item)
 		}
-	}
-	if info.Limit != nil {
-		fmt.Printf("\tLimit: %d\n", info.Limit)
-	}
-	if info.Offset != nil {
-		fmt.Printf("\tOffset: %d\n", *info.Offset)
 	}
 	return uint32(len(info.Items))
 }
 
-func downloadItemIfNeeded(accessToken string,
-	client *src.Client,
-	item src.ResourceInfoResponse) {
+func (yd YaDiskDownloader) shouldDownloadFile(item src.ResourceInfoResponse) bool {
+	if !strings.Contains(item.Path, yd.pathMask) {
+		return false
+	}
+	var extension = strings.ToUpper(filepath.Ext(item.Name))
+	if extension == ".MP4" {
+		return true
+	}
+
+	return false
+}
+
+func (yd YaDiskDownloader) downloadItemIfNeeded(item src.ResourceInfoResponse) {
 	path := item.Path
-	response, err := client.NewDownloadRequest(path).Exec()
+	response, err := yd.client.NewDownloadRequest(path).Exec()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	downloader := DownloaderWithProgress{accessToken}
+	downloader := DownloaderWithProgress{yd.accessToken, &ConsoleProgressOuptut{}}
 	downloader.DownloadFile(response.Href, item.Name, "tmp")
-	fmt.Println(response.Href)
 	os.Exit(0)
 
 }

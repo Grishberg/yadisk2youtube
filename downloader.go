@@ -17,11 +17,28 @@ import (
 	"time"
 )
 
-type DownloaderWithProgress struct {
-	AccessToken string
+/**
+* Is called when progress changes
+ */
+type ProgressOutput interface {
+	UpdateProgress(progress float64)
 }
 
-func PrintDownloadPercent(done chan int64, path string, total int64) {
+type DownloaderWithProgress struct {
+	accessToken    string
+	progressOutput ProgressOutput
+}
+
+type ConsoleProgressOuptut struct{}
+
+func (o *ConsoleProgressOuptut) UpdateProgress(progress float64) {
+	fmt.Printf("%.0f", progress)
+	fmt.Println("%")
+}
+
+func (d *DownloaderWithProgress) printDownloadPercent(done chan int64,
+	path string,
+	total int64) {
 
 	var stop bool = false
 
@@ -48,9 +65,7 @@ func PrintDownloadPercent(done chan int64, path string, total int64) {
 			}
 
 			var percent float64 = float64(size) / float64(total) * 100
-
-			fmt.Printf("%.0f", percent)
-			fmt.Println("%")
+			d.progressOutput.UpdateProgress(percent)
 		}
 
 		if stop {
@@ -61,7 +76,7 @@ func PrintDownloadPercent(done chan int64, path string, total int64) {
 	}
 }
 
-func (downloader DownloaderWithProgress) DownloadFile(
+func (d *DownloaderWithProgress) DownloadFile(
 	url string, name string, dest string) {
 
 	file := path.Base(name)
@@ -84,28 +99,15 @@ func (downloader DownloaderWithProgress) DownloadFile(
 
 	defer out.Close()
 
-	client := &http.Client{CheckRedirect: downloader.redirectPolicyFunc}
-
-	headResp, err := http.Head(url)
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer headResp.Body.Close()
-
-	size, err := strconv.Atoi(headResp.Header.Get("Content-Length"))
-
-	if err != nil {
-		panic(err)
-	}
+	client := &http.Client{CheckRedirect: d.redirectPolicyFunc}
+	size := d.calculateFileSize(client, url)
 
 	done := make(chan int64)
 
-	go PrintDownloadPercent(done, path.String(), int64(size))
+	go d.printDownloadPercent(done, path.String(), int64(size))
 
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Add("Authorization", "OAuth "+downloader.AccessToken)
+	req.Header.Add("Authorization", "OAuth "+d.accessToken)
 	resp, err := client.Do(req)
 
 	// resp, err := http.Get(url)
@@ -128,8 +130,25 @@ func (downloader DownloaderWithProgress) DownloadFile(
 	log.Printf("Download completed in %s", elapsed)
 }
 
-func (downloader DownloaderWithProgress) redirectPolicyFunc(r *http.Request,
+func (d *DownloaderWithProgress) calculateFileSize(client *http.Client, url string) int {
+	headResp, err := http.Head(url)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer headResp.Body.Close()
+
+	size, err := strconv.Atoi(headResp.Header.Get("Content-Length"))
+
+	if err != nil {
+		panic(err)
+	}
+	return size
+}
+
+func (d *DownloaderWithProgress) redirectPolicyFunc(r *http.Request,
 	via []*http.Request) error {
-	r.Header.Add("Authorization", "OAuth "+downloader.AccessToken)
+	r.Header.Add("Authorization", "OAuth "+d.accessToken)
 	return nil
 }
