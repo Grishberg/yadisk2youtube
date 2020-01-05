@@ -77,7 +77,7 @@ func (d *DownloaderWithProgress) printDownloadPercent(done chan int64,
 }
 
 func (d *DownloaderWithProgress) DownloadFile(
-	url string, name string, dest string) {
+	url string, name string, dest string) string {
 
 	file := path.Base(name)
 
@@ -128,6 +128,7 @@ func (d *DownloaderWithProgress) DownloadFile(
 
 	elapsed := time.Since(start)
 	log.Printf("Download completed in %s", elapsed)
+	return path.String()
 }
 
 func (d *DownloaderWithProgress) calculateFileSize(client *http.Client, url string) int {

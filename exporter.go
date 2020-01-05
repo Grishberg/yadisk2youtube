@@ -119,7 +119,9 @@ func (yd YaDiskDownloader) downloadItemIfNeeded(item src.ResourceInfoResponse) {
 	}
 
 	downloader := DownloaderWithProgress{yd.accessToken, &ConsoleProgressOuptut{}}
-	downloader.DownloadFile(response.Href, item.Name, "tmp")
+	downloadedPath := downloader.DownloadFile(response.Href, item.Name, "tmp")
+
+	Upload(downloadedPath, item.Name, "Uploaded with yadisk2youtube uploader", "rest")
 	os.Exit(0)
 
 }
