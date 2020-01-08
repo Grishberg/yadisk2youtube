@@ -81,7 +81,7 @@ func (d *DownloaderWithProgress) DownloadFile(
 
 	file := path.Base(name)
 
-	log.Printf("Downloading file %s from %s\n", file, url)
+	log.Printf("Downloading file %s n", file, url)
 
 	var path bytes.Buffer
 	path.WriteString(dest)

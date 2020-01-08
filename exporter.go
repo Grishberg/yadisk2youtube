@@ -27,6 +27,7 @@ type YaDiskDownloader struct {
 	accessToken string
 	pathMask    string
 	client      *src.Client
+	history     *SqlHistory
 }
 
 func main() {
@@ -40,6 +41,9 @@ func main() {
 		accessToken = os.Getenv("YADISK_ACCESS_TOKEN")
 	}
 	pathMask = "VIDEO"
+
+	history := NewHistory()
+	defer history.Close()
 
 	mediaTypeImage := src.MediaType{}
 	v := mediaTypeImage.Video()
@@ -66,11 +70,11 @@ func main() {
 		accessToken,
 		pathMask,
 		client,
-	}
+		history}
 
 	fmt.Printf("Fetching flat file list ...\n")
 	var offset uint32 = 1
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 100; i++ {
 		fmt.Println("read offset: ", offset)
 		readed := downloader.getFlatFileListWithOffset(mediaTypes, offset)
 		if readed == 0 {
@@ -90,15 +94,25 @@ func (yd YaDiskDownloader) getFlatFileListWithOffset(mediaTypes []src.MediaType,
 		os.Exit(1)
 	}
 
+	downloadCount := 0
 	for _, item := range info.Items {
 		if yd.shouldDownloadFile(item) {
-			yd.downloadItemIfNeeded(item)
+			yd.downloadItem(item)
+			downloadCount += 1
+
+			fmt.Println("downloaded, ", downloadCount)
+			if downloadCount >= 5 {
+				os.Exit(0)
+			}
 		}
 	}
 	return uint32(len(info.Items))
 }
 
 func (yd YaDiskDownloader) shouldDownloadFile(item src.ResourceInfoResponse) bool {
+	if yd.history.IsExists(item.Path) {
+		return false
+	}
 	if !strings.Contains(item.Path, yd.pathMask) {
 		return false
 	}
@@ -110,7 +124,7 @@ func (yd YaDiskDownloader) shouldDownloadFile(item src.ResourceInfoResponse) boo
 	return false
 }
 
-func (yd YaDiskDownloader) downloadItemIfNeeded(item src.ResourceInfoResponse) {
+func (yd YaDiskDownloader) downloadItem(item src.ResourceInfoResponse) {
 	path := item.Path
 	response, err := yd.client.NewDownloadRequest(path).Exec()
 	if err != nil {
@@ -120,8 +134,9 @@ func (yd YaDiskDownloader) downloadItemIfNeeded(item src.ResourceInfoResponse) {
 
 	downloader := DownloaderWithProgress{yd.accessToken, &ConsoleProgressOuptut{}}
 	downloadedPath := downloader.DownloadFile(response.Href, item.Name, "tmp")
-
+	fmt.Println(downloadedPath)
 	Upload(downloadedPath, item.Name, "Uploaded with yadisk2youtube uploader", "rest")
-	os.Exit(0)
 
+	os.Remove(downloadedPath)
+	yd.history.AddToHistory(item.Path)
 }

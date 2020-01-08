@@ -1,0 +1,5 @@
+CREATE TABLE settings (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE, 
+  filename TEXT
+)
+
