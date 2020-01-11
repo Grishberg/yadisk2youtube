@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -43,4 +44,17 @@ func (h *SqlHistory) AddToHistory(name string) {
 
 func (h *SqlHistory) Close() {
 	h.db.Close()
+}
+
+func ShowHistory() {
+	h := NewHistory()
+	defer h.Close()
+
+	rows, _ := h.db.Query("SELECT filename FROM history")
+
+	var filename string = ""
+	for rows.Next() {
+		rows.Scan(&filename)
+		fmt.Println(filename)
+	}
 }

@@ -33,9 +33,16 @@ type YaDiskDownloader struct {
 func main() {
 	var accessToken string
 	var pathMask string
+	var showHistory bool
 
 	flag.StringVar(&accessToken, "token", "", "Access Token")
 	flag.StringVar(&pathMask, "path", "", "Search path mask")
+	flag.BoolVar(&showHistory, "history", false, "Show uploaded history")
+
+	if showHistory {
+		ShowHistory()
+		os.Exit(0)
+	}
 
 	if accessToken == "" {
 		accessToken = os.Getenv("YADISK_ACCESS_TOKEN")
